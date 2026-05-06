@@ -1,0 +1,28 @@
+# MediaMTX config - apenas RTMP pra POC talkback JC371
+# Sem auth (POC interno). Em prod adicionar publish/read auth.
+
+logLevel: info
+logDestinations: [stdout]
+
+# Habilitamos so RTMP. Resto desligado pra reduzir surface.
+rtmp: yes
+rtmpAddress: :1935
+
+rtsp: no
+hls: no
+webrtc: no
+srt: no
+
+# Metricas/API
+metrics: yes
+metricsAddress: 127.0.0.1:9998
+api: no
+
+# Path padrao - aceita qualquer path tipo /live/<id>
+pathDefaults:
+  source: publisher
+  sourceProtocol: automatic
+
+# Timeout publisher curto pra liberar canal rapido apos talkback
+readTimeout: 30s
+writeTimeout: 30s

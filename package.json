@@ -1,0 +1,19 @@
+{
+  "name": "jc371-talkback-server",
+  "version": "0.1.0",
+  "description": "POC servidor RTMP + TTS PT-BR pra disparar talkback (intercom) em cameras Jimi JC371 via API YUV. Roda local ou Railway.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "talk": "node cli.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "axios": "^1.14.0",
+    "dotenv": "^16.3.0",
+    "express": "^4.21.0"
+  }
+}
