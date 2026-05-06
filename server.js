@@ -48,6 +48,75 @@ app.use(express.json({ limit: '128kb' }));
 
 app.get('/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
 
+// Stream "always-on" pra POC SMS direto. Sobe ffmpeg em path FIXO (live/teste)
+// que vai ficar tocando ate /stream/stop. Marco manda SMS pra camera com
+// startTalkURL apontando pra esse path enquanto o stream estah vivo.
+let liveStream = null; // { ffmpeg, ttsPath, streamKey, startedAt }
+
+app.post('/stream/start', async (req, res) => {
+  if (liveStream) {
+    return res.status(409).json({ error: 'stream ja ativo', state: liveStream });
+  }
+  const text = (req.body && req.body.text) || 'Atencao motorista, sistema Contele de voz ao vivo. Voce esta me ouvindo?';
+  const streamKey = (req.body && req.body.streamKey) || 'live/teste';
+  if (!RTMP_PUBLIC_HOST) return res.status(500).json({ error: 'RTMP_PUBLIC_HOST nao configurado' });
+  let tts;
+  try {
+    tts = await generateTTS(text, { id: 'always-on' });
+    const ffmpeg = pushAudio({ audioPath: tts.path, streamKey, loop: true });
+    liveStream = {
+      streamKey,
+      ttsPath: tts.path,
+      voice: tts.voice,
+      bytes: tts.sizeBytes,
+      startedAt: Date.now(),
+      ffmpeg,
+    };
+    const publicUrl = `rtmp://${RTMP_PUBLIC_HOST}:${RTMP_PUBLIC_PORT}/${streamKey}`;
+    console.log(`[stream/start] ${publicUrl} (loop, ate stop)`);
+    res.json({
+      ok: true,
+      mode: 'always-on',
+      publicUrl,
+      streamKey,
+      voice: tts.voice,
+      bytes: tts.sizeBytes,
+      smsSuggestions: {
+        sem_senha: `startTalkURL,${publicUrl}#`,
+        senha_0000: `0000,startTalkURL,${publicUrl}#`,
+        senha_123456: `123456,startTalkURL,${publicUrl}#`,
+      },
+      stopSmsSuggestions: {
+        sem_senha: `stopTalkURL,${publicUrl}#`,
+        senha_0000: `0000,stopTalkURL,${publicUrl}#`,
+      },
+    });
+  } catch (e) {
+    if (tts) { try { fs.unlinkSync(tts.path); } catch {} }
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/stream/stop', (_req, res) => {
+  if (!liveStream) return res.status(404).json({ error: 'sem stream ativo' });
+  console.log(`[stream/stop] ${liveStream.streamKey}`);
+  try { liveStream.ffmpeg.stop(); } catch {}
+  setTimeout(() => { try { fs.unlinkSync(liveStream.ttsPath); } catch {} }, 3000);
+  const out = { ok: true, stoppedKey: liveStream.streamKey, upMs: Date.now() - liveStream.startedAt };
+  liveStream = null;
+  res.json(out);
+});
+
+app.get('/stream/status', (_req, res) => {
+  if (!liveStream) return res.json({ active: false });
+  res.json({
+    active: true,
+    streamKey: liveStream.streamKey,
+    upMs: Date.now() - liveStream.startedAt,
+    publicUrl: `rtmp://${RTMP_PUBLIC_HOST}:${RTMP_PUBLIC_PORT}/${liveStream.streamKey}`,
+  });
+});
+
 app.get('/', (_req, res) => {
   res.json({
     name: 'jc371-talkback-server',
