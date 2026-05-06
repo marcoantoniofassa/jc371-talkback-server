@@ -20,16 +20,25 @@ if (!RTMP_PUBLIC_HOST) {
   console.warn('AVISO: RTMP_PUBLIC_HOST nao configurado. Camera nao vai conseguir conectar.');
 }
 
-// Sobe MediaMTX como filho persistente
+// Sobe MediaMTX como filho persistente. Em rolling deploy do Railway o container
+// antigo segura :1935 por alguns segundos, entao usamos backoff exponencial e nao
+// quebramos o Node se mediamtx falhar repetidamente (HTTP API segue funcionando).
 let mediamtxProc;
+let mediamtxRetries = 0;
 function startMediaMtx() {
   const cfg = path.join(__dirname, 'mediamtx.yml');
-  console.log(`[mediamtx] iniciando com config ${cfg}`);
+  const startedAt = Date.now();
+  console.log(`[mediamtx] iniciando (try=${mediamtxRetries + 1}) com config ${cfg}`);
   mediamtxProc = spawn('mediamtx', [cfg], { stdio: ['ignore', 'inherit', 'inherit'] });
   mediamtxProc.on('exit', code => {
-    console.error(`[mediamtx] saiu com code=${code}, reiniciando em 3s`);
-    setTimeout(startMediaMtx, 3000);
+    const upMs = Date.now() - startedAt;
+    if (upMs > 30_000) mediamtxRetries = 0; // estava saudavel, reseta backoff
+    else mediamtxRetries++;
+    const delay = Math.min(60_000, 5_000 * Math.pow(2, Math.min(mediamtxRetries, 4))); // 5s, 10s, 20s, 40s, 60s, 60s...
+    console.error(`[mediamtx] saiu code=${code} apos ${upMs}ms, reiniciando em ${delay}ms (retry=${mediamtxRetries})`);
+    setTimeout(startMediaMtx, delay);
   });
+  mediamtxProc.on('error', e => console.error(`[mediamtx] spawn err:`, e.message));
 }
 startMediaMtx();
 
