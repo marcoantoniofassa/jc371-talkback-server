@@ -18,11 +18,12 @@ metrics: yes
 metricsAddress: 127.0.0.1:9998
 api: no
 
-# Path padrao - aceita qualquer path tipo /live/<id>
-pathDefaults:
-  source: publisher
-  sourceProtocol: automatic
-
 # Timeout publisher curto pra liberar canal rapido apos talkback
 readTimeout: 30s
 writeTimeout: 30s
+
+# Paths dinamicos (regex catch-all) - aceita qualquer path tipo /live/<id>.
+# Sem isto, MediaMTX 1.9+ bloqueia publish/read em paths nao declarados.
+paths:
+  all_others:
+    source: publisher
